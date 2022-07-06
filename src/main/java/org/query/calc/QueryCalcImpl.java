@@ -1,9 +1,50 @@
 package org.query.calc;
 
+import gnu.trove.map.hash.TDoubleObjectHashMap;
+
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.NumberFormat;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Locale;
 
 public class QueryCalcImpl implements QueryCalc {
+    private static final NumberFormat OUTPUT_FORMAT;
+    private static final int MAX_RECORDS = 10;
+
+    static {
+        OUTPUT_FORMAT = NumberFormat.getInstance(Locale.US);
+        OUTPUT_FORMAT.setMaximumFractionDigits(6);
+        OUTPUT_FORMAT.setMinimumFractionDigits(6);
+        OUTPUT_FORMAT.setGroupingUsed(false);
+    }
+
+    /**
+     * Notes on the optimizations used:
+     *
+     * 1. BCDataset is a join of t2 and t3, having function calcSumYzProduct
+     *    that returns the sum of the y*z products for every b+c that is
+     *    greater than its argument. It does so via binary search of the first
+     *    record with a b + c above the argument and then caching
+     *    the products for the requested b + c and all the records having
+     *    a greater b + c.
+     * 2. The t1 dataset is not stored in memory and is processed in a
+     *    single pass.
+     *
+     * Thus, the task's performance requirements are satisfied:
+     * 1. The optimizations are tailored to computing time;
+     * 2. Only two tables' join and the single result table is
+     *    continuously kept in memory.
+     *
+     * An additional test case `case-4-ties-and-negatives` has been added
+     * to verify the performance and test edge cases of the
+     * implementation.
+     *
+     * Single additional dependency 'implementation 'net.sf.trove4j:trove4j:3.0.3'
+     * has been added for the fast collections for primitive data types.
+     */
     @Override
     public void select(Path t1, Path t2, Path t3, Path output) throws IOException {
         // - t1 is a file contains table "t1" with two columns "a" and "x". First line is a number of rows, then each
@@ -32,5 +73,68 @@ public class QueryCalcImpl implements QueryCalc {
         // Note: STABLE is not a standard SQL command. It means that you should preserve the original order. 
         // In this context it means, that in case of tie on s-value you should prefer value of a, with a lower row number.
         // In case multiple occurrences, you may assume that group has a row number of the first occurrence.
+
+        BCDataset bcDataset;
+        try (TuplesFileReader bReader = TuplesFileReader.open(t2);
+             TuplesFileReader cReader = TuplesFileReader.open(t3)) {
+            bcDataset = new BCDataset(bReader, cReader);
+        }
+
+        TDoubleObjectHashMap<ABCRecord> abc = new TDoubleObjectHashMap<>();
+        try(TuplesFileReader aReader = TuplesFileReader.open(t1)) {
+            int row = 0;
+            while (aReader.hasNext()) {
+                DoubleTuple aRecord = aReader.next();
+                double a = aRecord.getV1();
+                ABCRecord record = abc.get(aRecord.getV1());
+                if (record == null) {
+                    record = new ABCRecord(row, a, 0);
+                    abc.put(a, record);
+                    row += 1;
+                }
+                double x = aRecord.getV2();
+                double sumXyzProduct = x * bcDataset.calcSumYzProduct(a);
+                record.increaseSumXyzProduct(sumXyzProduct);
+            }
+        }
+
+        ABCRecord[] result = abc.values(new ABCRecord[0]);
+        Arrays.sort(result, (j, k) -> {
+            if (j.getSumXyzProduct() != k.getSumXyzProduct()) {
+                return -Double.compare(j.getSumXyzProduct(), k.getSumXyzProduct());
+            }
+            return Integer.compare(j.getRowNumber(), k.getRowNumber());
+        });
+
+        writeOutput(output, result);
+    }
+
+    private static void writeOutput(Path output, ABCRecord[] result) throws IOException {
+        Files.write(output, () -> new Iterator<CharSequence>() {
+            private int linePosition = 0;
+            private final StringBuilder text = new StringBuilder(50);
+
+            @Override
+            public boolean hasNext() {
+                return linePosition <= result.length
+                    && linePosition <= MAX_RECORDS; // <= because the first row is the count
+            }
+
+            @Override
+            public CharSequence next() {
+                if (linePosition == 0) {
+                    text.append(Math.min(result.length, MAX_RECORDS));
+                } else {
+                    text.delete(0, text.length());
+                    ABCRecord record = result[linePosition - 1]; // - 1 because the first row is the count
+                    text.append(OUTPUT_FORMAT.format(record.getA()))
+                        .append(' ')
+                        .append(OUTPUT_FORMAT.format(record.getSumXyzProduct()));
+                }
+                System.out.println(text);
+                linePosition += 1;
+                return text;
+            }
+        });
     }
 }

@@ -56,4 +56,9 @@ public class QueryCalcTest {
     public void testCase3() throws IOException, URISyntaxException {
         doTest("case-3", new QueryCalcImpl(), "case-3");
     }
+
+    @Test
+    public void testCase4TiesAndNegatives() throws IOException, URISyntaxException {
+        doTest("case-4-ties-and-negatives", new QueryCalcImpl(), "case-4-ties-and-negatives");
+    }
 }
