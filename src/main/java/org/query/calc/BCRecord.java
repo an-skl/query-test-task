@@ -1,9 +1,17 @@
 package org.query.calc;
 
-public final class BCRecord implements Comparable<BCRecord> {
+final class BCRecord implements Comparable<BCRecord> {
     private final double bPlusC;
     private final double yzProduct;
+
+    // SUM(Y * Z) for this record and those with higher b + c
     private double sumYzProduct;
+
+    // max(SUM(Y * Z)) for this record and those with higher b + c
+    private double maxSumYzProduct;
+
+    // min(SUM(Y * Z)) for this record and those with higher b + c
+    private double minSumYzProduct;
 
     public BCRecord(double bPlusC, double yzProduct) {
         this.bPlusC = bPlusC;
@@ -24,6 +32,22 @@ public final class BCRecord implements Comparable<BCRecord> {
 
     public void setSumYzProduct(double value) {
         sumYzProduct = value;
+    }
+
+    public double getMaxSumYzProduct() {
+        return maxSumYzProduct;
+    }
+
+    public void setMaxSumYzProduct(double maxSumYzProduct) {
+        this.maxSumYzProduct = maxSumYzProduct;
+    }
+
+    public double getMinSumYzProduct() {
+        return minSumYzProduct;
+    }
+
+    public void setMinSumYzProduct(double minSumYzProduct) {
+        this.minSumYzProduct = minSumYzProduct;
     }
 
     @Override

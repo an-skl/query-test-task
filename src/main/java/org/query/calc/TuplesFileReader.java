@@ -3,15 +3,11 @@ package org.query.calc;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.text.NumberFormat;
-import java.text.ParseException;
-import java.util.Locale;
 
-public class TuplesFileReader implements Closeable {
+final class TuplesFileReader implements Closeable {
     private final int count;
     private final InputStream inputStream;
     private final StringBuilder text = new StringBuilder(30);
-    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance(Locale.US);
     private DoubleTuple nextValue;
 
     public TuplesFileReader(int count, InputStream inputStream) {
@@ -49,11 +45,7 @@ public class TuplesFileReader implements Closeable {
         text.delete(0, text.length());
         readNonWhitespaceValue(text, inputStream);
         if (text.length() > 0) {
-            try {
-                return NUMBER_FORMAT.parse(text.toString()).doubleValue();
-            } catch (ParseException e) {
-                throw new IOException("Invalid file format, not a number token '" + text + "'.");
-            }
+            return Double.parseDouble(text.toString());
         }
         return null;
     }

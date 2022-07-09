@@ -1,6 +1,6 @@
 package org.query.calc;
 
-public class DoubleTuple {
+class DoubleTuple {
     private final double v1;
     private final double v2;
 

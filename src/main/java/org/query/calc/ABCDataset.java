@@ -5,7 +5,7 @@ import gnu.trove.map.hash.TDoubleObjectHashMap;
 import java.io.IOException;
 import java.util.Arrays;
 
-public final class ABCDataset {
+final class ABCDataset {
     private final ABCRecord[] records;
 
     public ABCDataset(TuplesFileReader aReader) throws IOException {
@@ -25,6 +25,16 @@ public final class ABCDataset {
         }
         records = abc.values(new ABCRecord[0]);
         Arrays.sort(records, (a, b) -> Double.compare(a.getA(), b.getA()));
+
+        double minTotalX = Double.POSITIVE_INFINITY;
+        double maxTotalX = Double.NEGATIVE_INFINITY;
+        for (int i = records.length - 1; i >= 0; i--) {
+            ABCRecord record = records[i];
+            minTotalX = Math.min(minTotalX, record.getTotalX());
+            maxTotalX = Math.max(maxTotalX, record.getTotalX());
+            record.setMinTotalX(minTotalX);
+            record.setMaxTotalX(maxTotalX);
+        }
     }
 
     public ABCRecord[] getRecordsSortedByA() {

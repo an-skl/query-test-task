@@ -1,6 +1,8 @@
 package org.query.calc;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
@@ -10,6 +12,7 @@ import java.nio.file.Path;
 
 import static org.query.calc.ResultComparator.assertFilesEqual;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class QueryCalcTest {
 
     public void doTest(String testName, QueryCalc queryCalc, String caseName) throws IOException, URISyntaxException {

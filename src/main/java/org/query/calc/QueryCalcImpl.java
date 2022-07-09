@@ -1,18 +1,17 @@
 package org.query.calc;
 
-import gnu.trove.map.hash.TDoubleObjectHashMap;
+import it.unimi.dsi.fastutil.doubles.Double2ObjectRBTreeMap;
+import it.unimi.dsi.fastutil.doubles.DoubleComparators;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Locale;
+import java.util.*;
 
 public class QueryCalcImpl implements QueryCalc {
     private static final NumberFormat OUTPUT_FORMAT;
-    private static final int MAX_RECORDS = 10;
+    public static final int MAX_RECORDS = 10;
 
     static {
         OUTPUT_FORMAT = NumberFormat.getInstance(Locale.US);
@@ -88,58 +87,88 @@ public class QueryCalcImpl implements QueryCalc {
         BCRecord[] bc = bcDataset.getRecordsSortedByBPlusC();
         ABCRecord[] abc = abcDataset.getRecordsSortedByA();
 
+        Double2ObjectRBTreeMap<List<ABCRecord>> resultMap = new Double2ObjectRBTreeMap<>(DoubleComparators.OPPOSITE_COMPARATOR);
+        double lastItemXyzProduct = Double.NEGATIVE_INFINITY;
+
         int bcIndex = 0;
-        for (int aIndex = 0; aIndex < abc.length && bcIndex < bc.length; aIndex++) {
+        for (int aIndex = 0; aIndex < abc.length && (bcIndex < bc.length || resultMap.size() < MAX_RECORDS); aIndex++) {
             ABCRecord abcRecord = abc[aIndex];
             double a = abcRecord.getA();
-            bcIndex = Arrays.binarySearch(bc, bcIndex, bc.length, new BCRecord(a, 0.0),
-                (bc1, bc2) -> Double.compare(bc1.getBPlusC(), bc2.getBPlusC()));
-            if (bcIndex >= 0) {
-                while (bcIndex < bc.length && bc[bcIndex].getBPlusC() <= a) {
-                    bcIndex += 1; // bPlusC must be greater than `a`
-                }
-            } else {
-                bcIndex = - (1 + bcIndex); // insertion point has b + c > a
-            }
+            bcIndex = bcDataset.findRecordIndexWithBPlusCGreaterThan(a, bcIndex, bc.length);
+            BCRecord bcRecord = null;
+            double sumXyzProduct = 0;
             if (bcIndex < bc.length) {
-                BCRecord bcRecord = bc[bcIndex];
-                abcRecord.setSumXyzProduct(abcRecord.getTotalX() * bcRecord.getSumYzProduct());
+                bcRecord = bc[bcIndex];
+                sumXyzProduct = abcRecord.getTotalX() * bcRecord.getSumYzProduct();
+            }
+            abcRecord.setSumXyzProduct(sumXyzProduct);
+
+            if (resultMap.size() == MAX_RECORDS) {
+                if (lastItemXyzProduct < sumXyzProduct) {
+                    resultMap.remove(lastItemXyzProduct);
+                } else {
+                    double remainingMaxSum = bcRecord == null ? Double.NEGATIVE_INFINITY :
+                        Math.max(
+                            abcRecord.getMaxTotalX() * bcRecord.getMaxSumYzProduct(),
+                            abcRecord.getMinTotalX() * bcRecord.getMinSumYzProduct()
+                        );
+                    if (remainingMaxSum < lastItemXyzProduct) {
+                        // If there's definitely no higher SUM(X*Y*Z) then stop iterating.
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+            }
+
+            List<ABCRecord> records = resultMap.get(sumXyzProduct);
+            if (records == null) {
+                records = new ArrayList<>(3);
+                resultMap.put(sumXyzProduct, records);
+            }
+            records.add(abcRecord);
+            if (resultMap.size() == MAX_RECORDS) {
+                lastItemXyzProduct = resultMap.lastDoubleKey();
             }
         }
 
-        Arrays.sort(abc, (j, k) -> {
-            if (j.getSumXyzProduct() != k.getSumXyzProduct()) {
-                return -Double.compare(j.getSumXyzProduct(), k.getSumXyzProduct());
+        List<ABCRecord> result = new ArrayList<>(MAX_RECORDS);
+        for (List<ABCRecord> ties : resultMap.values()) {
+            if (result.size() < MAX_RECORDS) {
+                ties.sort((a, b) -> Integer.compare(a.getRowNumber(), b.getRowNumber()));
+                result.addAll(ties);
+            } else {
+                break;
             }
-            return Integer.compare(j.getRowNumber(), k.getRowNumber());
-        });
+        }
+        result = result.subList(0, Math.min(result.size(), MAX_RECORDS));
 
-        writeOutput(output, abc);
+        writeOutput(output, result);
     }
 
-    private static void writeOutput(Path output, ABCRecord[] result) throws IOException {
+    private static void writeOutput(Path output, List<ABCRecord> result) throws IOException {
         Files.write(output, () -> new Iterator<CharSequence>() {
             private int linePosition = 0;
             private final StringBuilder text = new StringBuilder(50);
 
             @Override
             public boolean hasNext() {
-                return linePosition <= result.length
+                return linePosition <= result.size()
                     && linePosition <= MAX_RECORDS; // <= because the first row is the count
             }
 
             @Override
             public CharSequence next() {
                 if (linePosition == 0) {
-                    text.append(Math.min(result.length, MAX_RECORDS));
+                    text.append(Math.min(result.size(), MAX_RECORDS));
                 } else {
                     text.delete(0, text.length());
-                    ABCRecord record = result[linePosition - 1]; // - 1 because the first row is the count
+                    ABCRecord record = result.get(linePosition - 1); // - 1 because the first row is the count
                     text.append(OUTPUT_FORMAT.format(record.getA()))
                         .append(' ')
                         .append(OUTPUT_FORMAT.format(record.getSumXyzProduct()));
                 }
-                System.out.println(text);
+                //System.out.println(text);
                 linePosition += 1;
                 return text;
             }
