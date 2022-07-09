@@ -80,33 +80,41 @@ public class QueryCalcImpl implements QueryCalc {
             bcDataset = new BCDataset(bReader, cReader);
         }
 
-        TDoubleObjectHashMap<ABCRecord> abc = new TDoubleObjectHashMap<>();
+        ABCDataset abcDataset;
         try(TuplesFileReader aReader = TuplesFileReader.open(t1)) {
-            int row = 0;
-            while (aReader.hasNext()) {
-                DoubleTuple aRecord = aReader.next();
-                double a = aRecord.getV1();
-                ABCRecord record = abc.get(aRecord.getV1());
-                if (record == null) {
-                    record = new ABCRecord(row, a, 0);
-                    abc.put(a, record);
-                    row += 1;
+            abcDataset = new ABCDataset(aReader);
+        }
+
+        BCRecord[] bc = bcDataset.getRecordsSortedByBPlusC();
+        ABCRecord[] abc = abcDataset.getRecordsSortedByA();
+
+        int bcIndex = 0;
+        for (int aIndex = 0; aIndex < abc.length && bcIndex < bc.length; aIndex++) {
+            ABCRecord abcRecord = abc[aIndex];
+            double a = abcRecord.getA();
+            bcIndex = Arrays.binarySearch(bc, bcIndex, bc.length, new BCRecord(a, 0.0),
+                (bc1, bc2) -> Double.compare(bc1.getBPlusC(), bc2.getBPlusC()));
+            if (bcIndex >= 0) {
+                while (bcIndex < bc.length && bc[bcIndex].getBPlusC() <= a) {
+                    bcIndex += 1; // bPlusC must be greater than `a`
                 }
-                double x = aRecord.getV2();
-                double sumXyzProduct = x * bcDataset.calcSumYzProduct(a);
-                record.increaseSumXyzProduct(sumXyzProduct);
+            } else {
+                bcIndex = - (1 + bcIndex); // insertion point has b + c > a
+            }
+            if (bcIndex < bc.length) {
+                BCRecord bcRecord = bc[bcIndex];
+                abcRecord.setSumXyzProduct(abcRecord.getTotalX() * bcRecord.getSumYzProduct());
             }
         }
 
-        ABCRecord[] result = abc.values(new ABCRecord[0]);
-        Arrays.sort(result, (j, k) -> {
+        Arrays.sort(abc, (j, k) -> {
             if (j.getSumXyzProduct() != k.getSumXyzProduct()) {
                 return -Double.compare(j.getSumXyzProduct(), k.getSumXyzProduct());
             }
             return Integer.compare(j.getRowNumber(), k.getRowNumber());
         });
 
-        writeOutput(output, result);
+        writeOutput(output, abc);
     }
 
     private static void writeOutput(Path output, ABCRecord[] result) throws IOException {

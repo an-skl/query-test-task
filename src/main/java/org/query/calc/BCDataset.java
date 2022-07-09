@@ -5,8 +5,6 @@ import java.util.Arrays;
 
 public final class BCDataset {
     private final BCRecord[] records;
-    private int cachedProductsIndex;
-    private double cachedSumYzProduct = 0.0;
 
     public BCDataset(TuplesFileReader bReader, TuplesFileReader cReader) throws IOException {
         double[] rawCRecords = new double[cReader.getCount() * 2];
@@ -19,7 +17,6 @@ public final class BCDataset {
         }
 
         records = new BCRecord[bReader.getCount() * cReader.getCount()];
-        cachedProductsIndex = records.length;
         int position = 0;
         while (bReader.hasNext()) {
             DoubleTuple bRecord = bReader.next();
@@ -34,64 +31,37 @@ public final class BCDataset {
         }
 
         Arrays.sort(records);
+        cacheSumYzProducts();
     }
 
-    public double calcSumYzProduct(double bPlusCGreaterThan) {
-        int position = Arrays.binarySearch(
-            records,
-            new BCRecord(bPlusCGreaterThan, 0d),
-            (o1, o2) -> Double.compare(o1.getBPlusC(), o2.getBPlusC()));
-        if (position >= 0) {
-            // exact match found, whereas the record needs to have b + c greater than the specified argument
-            position += 1;
-        } else {
-            // exact match not found, the position to insert must have a value greater than sought one
-            position = -position - 1;
-        }
-        if (position < records.length) {
-            cacheSumYzProducts(position); // caching products for this b + c and above
-            return records[position].getSumYzProduct();
-        }
-        return 0.0;
+    public BCRecord[] getRecordsSortedByBPlusC() {
+        return records;
     }
 
-    private void cacheSumYzProducts(int minIndex) {
-        if (cachedProductsIndex <= minIndex) {
-            return;
-        }
-        double soughtBPlusC = records[minIndex].getBPlusC();
-        for (; minIndex > 0; minIndex--) {
-            BCRecord previousRecord = records[minIndex - 1];
-            if (previousRecord.getBPlusC() != soughtBPlusC) {
-                break;
-            }
-        }
-
-        double sumYzProduct = cachedSumYzProduct;
+    private void cacheSumYzProducts() {
+        double sumYzProduct = 0;
         BCRecord previousRecord = null;
         int sameBPlusCCount = 0;
-        for (int i = cachedProductsIndex - 1; i >= minIndex; i--) {
+        for (int i = records.length - 1; i >= 0; i--) {
             BCRecord record = records[i];
             double previousSumYzProduct = sumYzProduct;
             sumYzProduct += record.getYZProduct();
             if (previousRecord == null || previousRecord.getBPlusC() != record.getBPlusC()) {
                 record.setSumYzProduct(sumYzProduct);
-                setSumYzProductToPreviousRecords(sameBPlusCCount, i, previousSumYzProduct);
+                setSumYzProductToPreviousRecords(sameBPlusCCount, i + 1, previousSumYzProduct);
                 sameBPlusCCount = 1;
             } else {
                 sameBPlusCCount += 1;
             }
             previousRecord = record;
         }
-        setSumYzProductToPreviousRecords(sameBPlusCCount, minIndex - 1, sumYzProduct);
-        cachedSumYzProduct = sumYzProduct;
-        cachedProductsIndex = minIndex;
+        setSumYzProductToPreviousRecords(sameBPlusCCount, 0, sumYzProduct);
     }
 
     private void setSumYzProductToPreviousRecords(int sameBPlusCCount, int i, double previousSumYzProduct) {
         if (sameBPlusCCount > 1) {
             // setting the correct product to the previous records
-            for (int j = i + 1; j < i + sameBPlusCCount + 1; j++) {
+            for (int j = i; j < i + sameBPlusCCount; j++) {
                 records[j].setSumYzProduct(previousSumYzProduct);
             }
         }

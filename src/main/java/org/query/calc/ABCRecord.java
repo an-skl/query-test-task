@@ -3,6 +3,7 @@ package org.query.calc;
 public final class ABCRecord {
     private final int rowNumber;
     private final double a;
+    private double totalX;
     private double sumXyzProduct;
 
     public ABCRecord(int rowNumber, double a, double sumXyzProduct) {
@@ -19,11 +20,19 @@ public final class ABCRecord {
         return a;
     }
 
+    public double getTotalX() {
+        return totalX;
+    }
+
+    public void increaseTotalX(double x) {
+        totalX += x;
+    }
+
     public double getSumXyzProduct() {
         return sumXyzProduct;
     }
 
-    public void increaseSumXyzProduct(double xyzProduct) {
-        sumXyzProduct += xyzProduct;
+    public void setSumXyzProduct(double xyzProduct) {
+        sumXyzProduct = xyzProduct;
     }
 }
