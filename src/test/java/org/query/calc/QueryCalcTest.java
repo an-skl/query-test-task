@@ -40,6 +40,24 @@ public class QueryCalcTest {
         }
     }
 
+    /* @BeforeAll
+    public void warmUp() {
+        System.out.println("warming up");
+        for (int i = 0; i < 10; i++) {
+            try {
+                testCase0();
+                testCase1();
+                testCase2();
+                testCase3();
+                testCase4TiesAndNegatives();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (URISyntaxException e) {
+                e.printStackTrace();
+            }
+        }
+    } */
+
     @Test
     public void testCase0() throws IOException, URISyntaxException {
         doTest("case-0", new QueryCalcImpl(), "case-0");

@@ -23,14 +23,17 @@ public class QueryCalcImpl implements QueryCalc {
     /**
      * Notes on the optimizations used:
      *
-     * 1. BCDataset is a join of t2 and t3, having function calcSumYzProduct
-     *    that returns the sum of the y*z products for every b+c that is
-     *    greater than its argument. It does so via binary search of the first
-     *    record with a b + c above the argument and then caching
-     *    the products for the requested b + c and all the records having
-     *    a greater b + c.
-     * 2. The t1 dataset is not stored in memory and is processed in a
-     *    single pass.
+     * 1. BCDataset is a join of t2 and t3, it sorts the records by b + c
+     *    and stores yzProduct sums for that particular b + c and above.
+     * 2. The t1 dataset is stored in memory separately for efficient grouping
+     *    and sorting by a.
+     * 3. There is a single cycle that goes both through a's and b+c's in
+     *    ascending order with the binary search allowing to quickly skip
+     *    through the irrelevant b + c records.
+     * 4. There is an early return optimization that looks for the
+     *    max possible SUM(X*Y*Z) for remaining `a` and `b + c` records
+     *    and returns if that value is lower than the 10th largest
+     *    sum already found.
      *
      * Thus, the task's performance requirements are satisfied:
      * 1. The optimizations are tailored to computing time;
